@@ -1,0 +1,5 @@
+plugin: community.docker.docker_containers
+filters:
+  - include: >-
+      "User" in docker_config.Labels
+      

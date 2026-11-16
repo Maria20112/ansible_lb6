@@ -1,0 +1,63 @@
+---
+- name: CI/CD Pipeline for Microservices Application
+  hosts: microservices
+  become: true
+  gather_facts: true
+
+  tasks:
+    # --- ЭТАП 1: Получение изменений из Git по SSH (Пункты 4 и 5) ---
+    - name: Pull latest changes from Git repository
+      ansible.builtin.git:
+        repo: git@localhost:student/microservices-repo.git # Замените на ваш реальный SSH URL
+        dest: /opt/microservices_src
+        version: main
+        update: yes
+        accept_hostkey: yes
+      register: git_result
+
+    # --- ЭТАП 2: Быстрая сверка конфигураций (выполняется ВСЕГДА для валидации) ---
+    - name: Ensure configuration directory exists
+      ansible.builtin.file:
+        path: /app/config
+        state: directory
+        mode: '0755'
+
+    - name: Generate appsettings.json from Jinja2 template
+      ansible.builtin.template:
+        src: templates/appsettings.json.j2
+        dest: /app/config/appsettings.json
+        mode: '0644'
+        backup: yes
+      # Эта задача выполнится всегда. Если в secrets.yml изменен пароль, 
+      # Ansible его расшифрует и применит, обеспечивая идемпотентность.
+
+    # --- ЭТАП 3: CI (Статический анализ) - ТОЛЬКО если были новые коммиты ---
+    - name: CI - Run containerized SonarQube Scanner
+      ansible.builtin.shell: |
+        docker run --rm \
+          -v /opt/microservices_src/{{ inventory_hostname }}:/usr/src \
+          -w /usr/src \
+          sonarsource/sonar-scanner-cli \
+          sonar-scanner -Dsonar.projectKey={{ inventory_hostname }} -Dsonar.sources=. \
+          -Dsonar.host.url=http://sonarqube:9000 -Dsonar.login=your_sonar_token
+      when: git_result.changed
+      register: ci_result
+      ignore_errors: yes # Добавлено для учебной среды, чтобы пайплайн не падал, если SonarQube сервер недоступен
+
+    - name: Fail pipeline if CI fails
+      ansible.builtin.fail:
+        msg: "Static analysis (SonarQube) failed!"
+      when: ci_result is failed and git_result.changed
+
+    # --- ЭТАП 4: CD (Развертывание) - ТОЛЬКО если были новые коммиты ---
+    - name: CD - Build and deploy Docker Compose stack
+      ansible.builtin.shell: |
+        cd /opt/microservices_src/{{ inventory_hostname }}
+        docker compose up -d --build
+      when: git_result.changed
+      register: cd_result
+
+    - name: Verify deployment status
+      ansible.builtin.debug:
+        msg: "Deployment of {{ inventory_hostname }} completed successfully. New version deployed."
+      when: git_result.changed

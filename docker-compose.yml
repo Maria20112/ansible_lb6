@@ -1,11 +1,12 @@
-services:
+version: '3.8'
 
+services:
   kafka:
     image: apache/kafka:3.8.0
     container_name: kafka
-    ports:
-      - "9092:9092"
-      - "9093:9093"
+    expose:
+      - "9092"
+      - "9093"
     restart: unless-stopped
     environment:
       KAFKA_NODE_ID: 1
@@ -19,7 +20,6 @@ services:
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-
     volumes:
       - kafka_data:/var/lib/kafka/data
     healthcheck:
@@ -30,27 +30,14 @@ services:
     networks:
       - monitoring-network
 
-  kafka-ui:
-    image: provectuslabs/kafka-ui:latest
-    container_name: kafka-ui
-    ports:
-      - "8079:8080"
-    environment:
-      KAFKA_CLUSTERS_0_NAME: local
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
-    depends_on:
-      kafka:
-        condition: service_healthy
-    networks:
-      - monitoring-network
-
-
-  # приложение
+  # Приложение Object Service
   apartmentrentals:
     build: ./object_service
     container_name: apartmentrentals
     expose:
        - "8080"
+    ports:
+      - "2220:22"
     environment:
       - ASPNETCORE_URLS=http://+:8080
       - ASPNETCORE_ENVIRONMENT=Development
@@ -59,17 +46,21 @@ services:
       - monitoring-network
     labels:
       - "app.name=ApartmentRentals"
+      - "ansible.managed=true"
     depends_on:
       mongodb:
         condition: service_healthy
       redis:
         condition: service_healthy
 
+  # Приложение User Service
   user_services:
     build: ./user_service
     container_name: user_services
     expose:
        - "8080"
+    ports:
+      - "2221:22"
     environment:
       - ASPNETCORE_URLS=http://+:8080
       - ASPNETCORE_ENVIRONMENT=Development
@@ -77,7 +68,8 @@ services:
     networks:
       - monitoring-network
     labels:
-      - "app.name=ApartmentRentals"
+      - "app.name=User"
+      - "ansible.managed=true"
     depends_on:
       mongodb:
         condition: service_healthy
@@ -89,6 +81,9 @@ services:
     container_name: api_gateway  
     ports:
       - "5001:8080"  
+      - "2222:22"
+    labels:
+      - "ansible.managed=true"
     environment:
       - ASPNETCORE_URLS=http://+:8080  
       - ASPNETCORE_ENVIRONMENT=Development
@@ -104,6 +99,8 @@ services:
     container_name: auth_service
     expose:
        - "8080"
+    ports:
+      - "2223:22"
     environment:
       - ASPNETCORE_URLS=http://+:8080
       - ASPNETCORE_ENVIRONMENT=Development
@@ -112,17 +109,17 @@ services:
       - monitoring-network
     labels:
       - "app.name=AuthService"
+      - "ansible.managed=true"
     depends_on:
       mongodb:
         condition: service_healthy
       
-#Db
   mongodb:
     image: mongo:7.0
     container_name: mongodb
     restart: unless-stopped
-    ports:
-      - "27017:27017"
+    expose:
+      - "27017"
     volumes:
       - mongo_data:/data/db        
     networks:
@@ -133,13 +130,12 @@ services:
       timeout: 5s
       retries: 5
 
-  # Prometheus
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
     restart: unless-stopped
-    ports:
-      - "9090:9090"
+    expose:
+      - "9090"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
@@ -149,7 +145,6 @@ services:
     networks:
       - monitoring-network
 
-  # Grafana
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
@@ -168,13 +163,12 @@ services:
     depends_on:
       - prometheus
 
-#Cache
   redis:
     image: redis:latest
     container_name: redis_container
     restart: unless-stopped
-    ports:
-      - "6379:6379"
+    expose:
+      - "6379"
     volumes:
       - redis_data:/data
     networks:
@@ -184,19 +178,6 @@ services:
         limits:
           cpus: '0.50'
           memory: 512M
-
-
-    # command: >
-    #   sh -c '
-    #     mkdir -p /usr/local/etc/redis &&
-    #     echo "bind 0.0.0.0" > /usr/local/etc/redis/redis.conf &&
-    #     echo "requirepass $REDIS_PASSWORD" >> /usr/local/etc/redis/redis.conf &&
-    #     echo "appendonly yes" >> /usr/local/etc/redis/redis.conf &&
-    #     echo "appendfsync everysec" >> /usr/local/etc/redis/redis.conf &&
-    #     echo "user default on nopass ~* +@all" > /usr/local/etc/redis/users.acl &&
-    #     echo "user $REDIS_USER on >$REDIS_USER_PASSWORD ~* +@all" >> /usr/local/etc/redis/users.acl &&
-    #     redis-server /usr/local/etc/redis/redis.conf --aclfile /usr/local/etc/redis/users.acl
-    #   '
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 30s

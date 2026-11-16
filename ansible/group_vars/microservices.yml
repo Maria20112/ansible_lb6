@@ -1,0 +1,5 @@
+log_level: "Information"
+redis_host: "redis_container"
+redis_port: 6379
+
+ansible_host: localhost

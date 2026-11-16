@@ -1,0 +1,3 @@
+ansible_port: 2223
+ASPNETCORE_ENVIRONMENT: "Production"
+ConnectionStrings__MongoDB: "mongodb://mongodb:27017/AuthStore"

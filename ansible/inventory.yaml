@@ -1,0 +1,8 @@
+all:
+  children:
+    microservices:
+      hosts:
+        objects:
+        users:
+        api_gateway:
+        auth:

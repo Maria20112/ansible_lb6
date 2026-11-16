@@ -1,0 +1,26 @@
+{
+  "ServiceName": "{{ inventory_hostname }}",
+  "Port": "{{ansible_port}}",
+  "Environment": "{{ ASPNETCORE_ENVIRONMENT | default('Development') }}",
+  "ConnectionStrings": {
+    "MongoDB": "{{ ConnectionStrings__MongoDB | default('') }}"
+  },
+  "Redis": {
+    "Host": "{{ redis_host | default('redis_container') }}",
+    "Port": {{ redis_port | default(6379) }}
+  },
+  "Kafka": {
+    "BootstrapServers": "kafka:9092"
+  },
+  "ServiceDiscovery": {
+    "AvailableServices": [
+      {% for host in groups['microservices'] %}
+            {
+              "Name": "{{ host }}",
+              "Host": "{{ hostvars[host]['ansible_host'] | default('localhost') }}",
+              "Port": {{ hostvars[host]['ansible_port'] | default(8080) }}
+            }{% if not loop.last %},{% endif %}
+      {% endfor %}
+    ]
+  }
+}

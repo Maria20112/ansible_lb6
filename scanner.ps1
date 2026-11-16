@@ -7,11 +7,9 @@ dotnet tool install --tool-path .tools dotnet-sonarscanner
 .tools\dotnet-sonarscanner begin `
     /key:lb1 `
     /d:sonar.host.url=$sonarHostUrl `
-    /d:sonar.login=$sonarToken `
-    /d:sonar.qualitygate.wait=false `
-    /d:sonar.sources=.
+    /d:sonar.token=$sonarToken 
 
-dotnet build 
+dotnet build
 
 .tools\dotnet-sonarscanner end `
-    /d:sonar.login=$sonarToken
+    /d:sonar.token=$sonarToken

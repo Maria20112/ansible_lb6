@@ -167,11 +167,10 @@
     <Property Name="sonar.java.jvmframeworkconfig.activate">true</Property>
     <Property Name="sonar.updatecenter.url">https://downloads.sonarsource.com/sonarqube/update/update-center.properties</Property>
     <Property Name="sonar.core.id">243B8A4D-AaECxWTKJ5fspJYg5kA6</Property>
-    <Property Name="sonar.core.startTime">11.10.2026 20:23:54</Property>
+    <Property Name="sonar.core.startTime">13.10.2026 8:01:50</Property>
   </ServerSettings>
   <LocalSettings>
     <Property Name="sonar.host.url">http://localhost:9000</Property>
-    <Property Name="sonar.qualitygate.wait">false</Property>
   </LocalSettings>
   <ScannerOptsSettings />
   <AnalyzersSettings>
