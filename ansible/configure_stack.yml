@@ -9,7 +9,7 @@
       ansible.builtin.git:
         repo: "file:///opt/git-repo/microservices.git"
         dest: /tmp/microservices_src_control
-        version: main
+        version: test_branch
         update: yes
       delegate_to: localhost
       run_once: true
