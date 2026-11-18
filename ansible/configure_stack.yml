@@ -9,7 +9,7 @@
       ansible.builtin.apt:
         name:
           - docker.io
-          - docker-compose-plugin # Современный пакет для docker compose
+          - docker-compose # Современный пакет для docker compose
           - rsync                 # Необходим для модуля synchronize
         state: present
         update_cache: yes
@@ -26,9 +26,9 @@
     # Мы клонируем на localhost, чтобы использовать его SSH-ключи для Git
     - name: Pull latest changes from Git repository to Control Node
       ansible.builtin.git:
-        repo: "git@<ваш_git_server>:<ваш_репозиторий>.git" # Замените на ваш SSH URL (или file:/// если локальный bare repo)
+        repo: "file:///opt/git-repo/microservices.git" # Замените на ваш SSH URL (или file:/// если локальный bare repo)
         dest: /tmp/microservices_src_control
-        version: main
+        version: test_branch
         update: yes
         accept_hostkey: yes
       delegate_to: localhost
@@ -69,7 +69,7 @@
           -w /usr/src \
           sonarsource/sonar-scanner-cli \
           sonar-scanner -Dsonar.projectKey={{ inventory_hostname }} -Dsonar.sources=. \
-          -Dsonar.host.url=http://<IP_УПРАВЛЯЮЩЕГО_УЗЛА>:9000 \
+          -Dsonar.host.url=http://localhost:9000 \
           -Dsonar.login={{ sonarqube_token }}
       become: true
       when: git_result.changed
