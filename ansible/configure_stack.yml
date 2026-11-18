@@ -15,15 +15,6 @@
       run_once: true
       register: git_result
 
-    # --- ЭТАП 2: Синхронизация кода (только при изменениях, п. 5) ---
-    - name: Synchronize code to target hosts
-      ansible.posix.synchronize:
-        src: /tmp/microservices_src_control/
-        dest: /opt/microservices_src/
-        delete: yes
-      become: true
-      when: git_result.changed
-
     # --- ЭТАП 3: Быстрая сверка конфигураций (ВСЕГДА, п. 5) ---
     - name: Ensure configuration directory exists
       ansible.builtin.file:
