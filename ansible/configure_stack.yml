@@ -53,8 +53,19 @@
       delegate_to: localhost
       when: ci_result is failed and git_result.changed
 
-    # --- ЭТАП 5: CD - Сборка и развертывание (ОДИН РАЗ ДЛЯ ВСЕГО СТЕКА, п. 3) ---
-    # Запускаем из корня, чтобы избежать конфликтов container_name между микросервисами
+         # --- ЭТАП 5: CD - Сборка и развертывание (ОДИН РАЗ ДЛЯ ВСЕГО СТЕКА, п. 3) ---
+    
+    # 5.1. Гарантированная очистка старого стека для освобождения портов
+    - name: CD - Ensure clean state (stop old containers holding ports)
+      ansible.builtin.shell: |
+        cd /tmp/microservices_src_control
+        docker compose down --remove-orphans || true
+      delegate_to: localhost
+      run_once: true
+      when: git_result.changed
+      ignore_errors: true # Игнорируем ошибку, если стека еще не существует
+
+    # 5.2. Сборка и запуск актуального стека
     - name: CD - Build and deploy unified Docker Compose stack
       ansible.builtin.shell: |
         cd /tmp/microservices_src_control
