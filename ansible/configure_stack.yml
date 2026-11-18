@@ -51,7 +51,7 @@
           sonarsource/sonar-scanner-cli \
           sonar-scanner -Dsonar.projectKey={{ inventory_hostname }} -Dsonar.sources=. \
           -Dsonar.host.url=http://host.docker.internal:9000 \
-          -Dsonar.login={{ sonarqube_token }}
+          -Dsonar.token={{ sonarqube_token }}
       delegate_to: localhost
       when: git_result.changed
       register: ci_result
