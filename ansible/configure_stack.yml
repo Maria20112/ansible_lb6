@@ -4,37 +4,48 @@
   gather_facts: true
 
   tasks:
-    - name: Install required packages (Docker, Git, Compose)
+    # 0. Подготовка окружения на целевых хостах
+    - name: Install required packages (Docker, Git, Compose, rsync)
       ansible.builtin.apt:
         name:
-          - git
           - docker.io
-          - docker-compose
+          - docker-compose-plugin # Современный пакет для docker compose
+          - rsync                 # Необходим для модуля synchronize
         state: present
         update_cache: yes
       become: true
 
-    # --- ЭТАП 1: Получение изменений (Работает без SSH-ключей!) ---
-    - name: Ensure destination directory exists
-      ansible.builtin.file:
-        path: /opt/microservices_src
-        state: directory
-        owner: student
-        group: student
-        mode: '0755'
+    - name: Ensure Docker service is running and enabled
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: yes
       become: true
 
-    - name: Pull latest changes from local control-node repository
+    # --- ЭТАП 1: Получение изменений на Control Node (Пункт 4) ---
+    # Мы клонируем на localhost, чтобы использовать его SSH-ключи для Git
+    - name: Pull latest changes from Git repository to Control Node
       ansible.builtin.git:
-        repo: "file:///opt/git-repo/microservices.git" # <-- Ключевое изменение
-        dest: /opt/microservices_src
+        repo: "git@<ваш_git_server>:<ваш_репозиторий>.git" # Замените на ваш SSH URL (или file:/// если локальный bare repo)
+        dest: /tmp/microservices_src_control
         version: main
         update: yes
-      delegate_to: localhost                 # <--- КЛЮЧЕВОЙ МОМЕНТ: выполняем на localhost
+        accept_hostkey: yes
+      delegate_to: localhost
       run_once: true
       register: git_result
 
-    # --- ЭТАП 2: Быстрая сверка конфигураций (ВСЕГДА) ---
+    # --- ЭТАП 2: Синхронизация кода с Control Node на Target Hosts ---
+    # Решает проблему "пустых целевых хостов"
+    - name: Synchronize fresh code from Control Node to Target Hosts
+      ansible.posix.synchronize:
+        src: /tmp/microservices_src_control/ # Слэш в конце важен! Копирует содержимое папки
+        dest: /opt/microservices_src/
+        delete: yes                          # Удаляет старые файлы, которых нет в репозитории
+      become: true
+      when: git_result.changed               # Пункт 5: Оптимизация
+
+    # --- ЭТАП 3: Быстрая сверка конфигураций (ВСЕГДА, даже если нет изменений) ---
     - name: Ensure configuration directory exists
       ansible.builtin.file:
         path: /app/config
@@ -50,7 +61,7 @@
         backup: yes
       become: true
 
-    # --- ЭТАП 3: CI (Только если git_result.changed == true) ---
+    # --- ЭТАП 4: CI (Только если были изменения в Git) ---
     - name: CI - Run containerized SonarQube Scanner
       ansible.builtin.shell: |
         docker run --rm \
@@ -58,7 +69,8 @@
           -w /usr/src \
           sonarsource/sonar-scanner-cli \
           sonar-scanner -Dsonar.projectKey={{ inventory_hostname }} -Dsonar.sources=. \
-          -Dsonar.host.url=http://sonarqube:9000 -Dsonar.login={{ sonarqube_token }}
+          -Dsonar.host.url=http://<IP_УПРАВЛЯЮЩЕГО_УЗЛА>:9000 \
+          -Dsonar.login={{ sonarqube_token }}
       become: true
       when: git_result.changed
       register: ci_result
@@ -66,11 +78,11 @@
 
     - name: Fail pipeline if CI fails
       ansible.builtin.fail:
-        msg: "Static analysis (SonarQube) failed!"
+        msg: "Static analysis (SonarQube) failed for {{ inventory_hostname }}!"
       become: true
       when: ci_result is failed and git_result.changed
 
-    # --- ЭТАП 4: CD (Только если git_result.changed == true) ---
+    # --- ЭТАП 5: CD (Только если были изменения в Git) ---
     - name: CD - Build and deploy Docker Compose stack
       ansible.builtin.shell: |
         cd /opt/microservices_src/{{ inventory_hostname }}
@@ -81,5 +93,5 @@
 
     - name: Verify deployment status
       ansible.builtin.debug:
-        msg: "Deployment of {{ inventory_hostname }} completed successfully. New version deployed."
+        msg: "Deployment of {{ inventory_hostname }} completed successfully."
       when: git_result.changed
