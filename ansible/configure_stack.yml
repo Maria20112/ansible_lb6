@@ -1,26 +1,46 @@
 ---
 - name: CI/CD Pipeline for Microservices Application
   hosts: microservices
-  become: true
   gather_facts: true
 
   tasks:
-    # --- ЭТАП 1: Получение изменений из Git по SSH (Пункты 4 и 5) ---
-    - name: Pull latest changes from Git repository
+    - name: Install required packages (Docker, Git, Compose)
+      ansible.builtin.apt:
+        name:
+          - git
+          - docker.io
+          - docker-compose
+        state: present
+        update_cache: yes
+      become: true
+
+    # --- ЭТАП 1: Получение изменений (Работает без SSH-ключей!) ---
+    - name: Ensure destination directory exists
+      ansible.builtin.file:
+        path: /opt/microservices_src
+        state: directory
+        owner: student
+        group: student
+        mode: '0755'
+      become: true
+
+    - name: Pull latest changes from local control-node repository
       ansible.builtin.git:
-        repo: git@localhost:student/microservices-repo.git # Замените на ваш реальный SSH URL
+        repo: "file:///opt/git-repo/microservices.git" # <-- Ключевое изменение
         dest: /opt/microservices_src
         version: main
         update: yes
-        accept_hostkey: yes
+      delegate_to: localhost                 # <--- КЛЮЧЕВОЙ МОМЕНТ: выполняем на localhost
+      run_once: true
       register: git_result
 
-    # --- ЭТАП 2: Быстрая сверка конфигураций (выполняется ВСЕГДА для валидации) ---
+    # --- ЭТАП 2: Быстрая сверка конфигураций (ВСЕГДА) ---
     - name: Ensure configuration directory exists
       ansible.builtin.file:
         path: /app/config
         state: directory
         mode: '0755'
+      become: true
 
     - name: Generate appsettings.json from Jinja2 template
       ansible.builtin.template:
@@ -28,10 +48,9 @@
         dest: /app/config/appsettings.json
         mode: '0644'
         backup: yes
-      # Эта задача выполнится всегда. Если в secrets.yml изменен пароль, 
-      # Ansible его расшифрует и применит, обеспечивая идемпотентность.
+      become: true
 
-    # --- ЭТАП 3: CI (Статический анализ) - ТОЛЬКО если были новые коммиты ---
+    # --- ЭТАП 3: CI (Только если git_result.changed == true) ---
     - name: CI - Run containerized SonarQube Scanner
       ansible.builtin.shell: |
         docker run --rm \
@@ -39,21 +58,24 @@
           -w /usr/src \
           sonarsource/sonar-scanner-cli \
           sonar-scanner -Dsonar.projectKey={{ inventory_hostname }} -Dsonar.sources=. \
-          -Dsonar.host.url=http://sonarqube:9000 -Dsonar.login=your_sonar_token
+          -Dsonar.host.url=http://sonarqube:9000 -Dsonar.login={{ sonarqube_token }}
+      become: true
       when: git_result.changed
       register: ci_result
-      ignore_errors: yes # Добавлено для учебной среды, чтобы пайплайн не падал, если SonarQube сервер недоступен
+      ignore_errors: yes
 
     - name: Fail pipeline if CI fails
       ansible.builtin.fail:
         msg: "Static analysis (SonarQube) failed!"
+      become: true
       when: ci_result is failed and git_result.changed
 
-    # --- ЭТАП 4: CD (Развертывание) - ТОЛЬКО если были новые коммиты ---
+    # --- ЭТАП 4: CD (Только если git_result.changed == true) ---
     - name: CD - Build and deploy Docker Compose stack
       ansible.builtin.shell: |
         cd /opt/microservices_src/{{ inventory_hostname }}
         docker compose up -d --build
+      become: true
       when: git_result.changed
       register: cd_result
 
