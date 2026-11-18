@@ -4,10 +4,10 @@
   gather_facts: true
 
   tasks:
-    # --- ЭТАП 1: Получение изменений на Control Node ---
+    # --- ЭТАП 1: Получение изменений по SSH (п. 4) ---
     - name: Pull latest changes from Git repository
       ansible.builtin.git:
-        repo: "file:///opt/git-repo/microservices.git"
+        repo: "file:///opt/git-repo/microservices.git" # Укажите ваш SSH-адрес репозитория
         dest: /tmp/microservices_src_control
         version: test_branch
         update: yes
@@ -15,7 +15,7 @@
       run_once: true
       register: git_result
 
-    # --- ЭТАП 2: Синхронизация кода на целевые хосты (для конфигурации) ---
+    # --- ЭТАП 2: Синхронизация кода (только при изменениях, п. 5) ---
     - name: Synchronize code to target hosts
       ansible.posix.synchronize:
         src: /tmp/microservices_src_control/
@@ -24,7 +24,7 @@
       become: true
       when: git_result.changed
 
-    # --- ЭТАП 3: Быстрая сверка конфигураций (ВСЕГДА) ---
+    # --- ЭТАП 3: Быстрая сверка конфигураций (ВСЕГДА, п. 5) ---
     - name: Ensure configuration directory exists
       ansible.builtin.file:
         path: /app/config
@@ -39,9 +39,8 @@
         mode: '0644'
         backup: yes
       become: true
-
-    # --- ЭТАП 4: CI (ВЫПОЛНЯЕМ НА LOCALHOST) ---
-        # --- ЭТАП 4: CI (ВЫПОЛНЯЕМ НА LOCALHOST) ---
+      
+    # --- ЭТАП 4: CI - Статический анализ (только при изменениях) ---
     - name: CI - Run containerized SonarQube Scanner
       ansible.builtin.shell: |
         docker run --rm \
@@ -63,17 +62,20 @@
       delegate_to: localhost
       when: ci_result is failed and git_result.changed
 
-    # --- ЭТАП 5: CD (ВЫПОЛНЯЕМ НА LOCALHOST) ---
-    - name: CD - Build and deploy Docker Compose stack
+    # --- ЭТАП 5: CD - Сборка и развертывание (ОДИН РАЗ ДЛЯ ВСЕГО СТЕКА, п. 3) ---
+    # Запускаем из корня, чтобы избежать конфликтов container_name между микросервисами
+    - name: CD - Build and deploy unified Docker Compose stack
       ansible.builtin.shell: |
-        cd /tmp/microservices_src_control/{{ inventory_hostname }}
-        docker compose up -d --build
+        cd /tmp/microservices_src_control
+        docker compose up -d --build --remove-orphans
       delegate_to: localhost
+      run_once: true
       when: git_result.changed
       register: cd_result
 
     - name: Verify deployment status
       ansible.builtin.debug:
-        msg: "Deployment of {{ inventory_hostname }} completed successfully."
+        msg: "Deployment of the entire microservices stack completed successfully."
       delegate_to: localhost
+      run_once: true
       when: git_result.changed
