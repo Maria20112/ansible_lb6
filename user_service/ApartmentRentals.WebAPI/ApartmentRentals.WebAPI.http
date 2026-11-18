@@ -1,6 +1,0 @@
-@ApartmentRentals.WebAPI_HostAddress = http://localhost:5153
-
-GET {{ApartmentRentals.WebAPI_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###

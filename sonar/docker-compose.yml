@@ -1,0 +1,44 @@
+services:
+  sonarqube:
+    image: sonarqube:community
+    container_name: sonarqube
+    depends_on:
+      - db
+    environment:
+      - SONAR_JDBC_URL=${SONAR_JDBC_URL}
+      - SONAR_JDBC_USERNAME=${SONAR_JDBC_USERNAME}
+      - SONAR_JDBC_PASSWORD=${SONAR_JDBC_PASSWORD}
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+      - sonarqube_logs:/opt/sonarqube/logs
+    ports:
+      - "9000:9000"
+    restart: unless-stopped
+    networks:
+      - sonar
+
+  db:
+    image: postgres:15
+    container_name: sonarqube_db
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - postgresql:/var/lib/postgresql
+      - postgresql_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - sonar
+
+volumes:
+  sonarqube_data:
+  sonarqube_extensions:
+  sonarqube_logs:
+  postgresql:
+  postgresql_data:
+
+networks:
+  sonar:
+    driver: bridge
