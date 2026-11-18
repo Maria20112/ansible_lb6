@@ -7,7 +7,7 @@
     # --- ЭТАП 1: Получение изменений по SSH (п. 4) ---
     - name: Pull latest changes from Git repository
       ansible.builtin.git:
-        repo: "file:///opt/git-repo/microservices.git" # Укажите ваш SSH-адрес репозитория
+        repo: "file:///opt/git-repo/microservices.git"
         dest: /tmp/microservices_src_control
         version: test_branch
         update: yes
