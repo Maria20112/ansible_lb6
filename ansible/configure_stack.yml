@@ -4,48 +4,27 @@
   gather_facts: true
 
   tasks:
-    # 0. Подготовка окружения на целевых хостах
-    - name: Install required packages (Docker, Git, Compose, rsync)
-      ansible.builtin.apt:
-        name:
-          - docker.io
-          - docker-compose # Современный пакет для docker compose
-          - rsync                 # Необходим для модуля synchronize
-        state: present
-        update_cache: yes
-      become: true
-
-    - name: Ensure Docker service is running and enabled
-      ansible.builtin.systemd:
-        name: docker
-        state: started
-        enabled: yes
-      become: true
-
-    # --- ЭТАП 1: Получение изменений на Control Node (Пункт 4) ---
-    # Мы клонируем на localhost, чтобы использовать его SSH-ключи для Git
-    - name: Pull latest changes from Git repository to Control Node
+    # --- ЭТАП 1: Получение изменений на Control Node ---
+    - name: Pull latest changes from Git repository
       ansible.builtin.git:
-        repo: "file:///opt/git-repo/microservices.git" # Замените на ваш SSH URL (или file:/// если локальный bare repo)
+        repo: "file:///opt/git-repo/microservices.git"
         dest: /tmp/microservices_src_control
-        version: test_branch
+        version: main
         update: yes
-        accept_hostkey: yes
       delegate_to: localhost
       run_once: true
       register: git_result
 
-    # --- ЭТАП 2: Синхронизация кода с Control Node на Target Hosts ---
-    # Решает проблему "пустых целевых хостов"
-    - name: Synchronize fresh code from Control Node to Target Hosts
+    # --- ЭТАП 2: Синхронизация кода на целевые хосты (для конфигурации) ---
+    - name: Synchronize code to target hosts
       ansible.posix.synchronize:
-        src: /tmp/microservices_src_control/ # Слэш в конце важен! Копирует содержимое папки
+        src: /tmp/microservices_src_control/
         dest: /opt/microservices_src/
-        delete: yes                          # Удаляет старые файлы, которых нет в репозитории
+        delete: yes
       become: true
-      when: git_result.changed               # Пункт 5: Оптимизация
+      when: git_result.changed
 
-    # --- ЭТАП 3: Быстрая сверка конфигураций (ВСЕГДА, даже если нет изменений) ---
+    # --- ЭТАП 3: Быстрая сверка конфигураций (ВСЕГДА) ---
     - name: Ensure configuration directory exists
       ansible.builtin.file:
         path: /app/config
@@ -53,7 +32,7 @@
         mode: '0755'
       become: true
 
-    - name: Generate appsettings.json from Jinja2 template
+    - name: Generate appsettings.json from template
       ansible.builtin.template:
         src: templates/appsettings.json.j2
         dest: /app/config/appsettings.json
@@ -61,37 +40,40 @@
         backup: yes
       become: true
 
-    # --- ЭТАП 4: CI (Только если были изменения в Git) ---
+    # --- ЭТАП 4: CI (ВЫПОЛНЯЕМ НА LOCALHOST) ---
+        # --- ЭТАП 4: CI (ВЫПОЛНЯЕМ НА LOCALHOST) ---
     - name: CI - Run containerized SonarQube Scanner
       ansible.builtin.shell: |
         docker run --rm \
-          -v /opt/microservices_src/{{ inventory_hostname }}:/usr/src \
+          -v /tmp/microservices_src_control/{{ inventory_hostname }}:/usr/src \
           -w /usr/src \
+          --add-host=host.docker.internal:host-gateway \
           sonarsource/sonar-scanner-cli \
           sonar-scanner -Dsonar.projectKey={{ inventory_hostname }} -Dsonar.sources=. \
-          -Dsonar.host.url=http://localhost:9000 \
+          -Dsonar.host.url=http://host.docker.internal:9000 \
           -Dsonar.login={{ sonarqube_token }}
-      become: true
+      delegate_to: localhost
       when: git_result.changed
       register: ci_result
       ignore_errors: yes
 
     - name: Fail pipeline if CI fails
       ansible.builtin.fail:
-        msg: "Static analysis (SonarQube) failed for {{ inventory_hostname }}!"
-      become: true
+        msg: "Static analysis failed for {{ inventory_hostname }}!"
+      delegate_to: localhost
       when: ci_result is failed and git_result.changed
 
-    # --- ЭТАП 5: CD (Только если были изменения в Git) ---
+    # --- ЭТАП 5: CD (ВЫПОЛНЯЕМ НА LOCALHOST) ---
     - name: CD - Build and deploy Docker Compose stack
       ansible.builtin.shell: |
-        cd /opt/microservices_src/{{ inventory_hostname }}
+        cd /tmp/microservices_src_control/{{ inventory_hostname }}
         docker compose up -d --build
-      become: true
+      delegate_to: localhost
       when: git_result.changed
       register: cd_result
 
     - name: Verify deployment status
       ansible.builtin.debug:
         msg: "Deployment of {{ inventory_hostname }} completed successfully."
+      delegate_to: localhost
       when: git_result.changed
