@@ -7,9 +7,9 @@
     # --- ЭТАП 1: Получение изменений по SSH (п. 4) ---
     - name: Pull latest changes from Git repository
       ansible.builtin.git:
-        repo: "file:///opt/git-repo/microservices.git"
-        dest: /tmp/microservices_src_control
-        version: test_branch
+        repo: "https://github.com/Maria20112/ansible_lb6.git"
+        dest: /tmp/PCPO
+        version: main
         update: yes
       delegate_to: localhost
       run_once: true
@@ -35,7 +35,7 @@
     - name: CI - Run containerized SonarQube Scanner
       ansible.builtin.shell: |
         docker run --rm \
-          -v /tmp/microservices_src_control/{{ inventory_hostname }}:/usr/src \
+          -v /tmp/PCPO/{{ inventory_hostname }}:/usr/src \
           -w /usr/src \
           --add-host=host.docker.internal:host-gateway \
           sonarsource/sonar-scanner-cli \
@@ -58,7 +58,7 @@
     # 5.1. Гарантированная очистка старого стека для освобождения портов
     - name: CD - Ensure clean state (stop old containers holding ports)
       ansible.builtin.shell: |
-        cd /tmp/microservices_src_control
+        cd /tmp/PCPO
         docker compose down --remove-orphans || true
       delegate_to: localhost
       run_once: true
@@ -68,7 +68,7 @@
     # 5.2. Сборка и запуск актуального стека
     - name: CD - Build and deploy unified Docker Compose stack
       ansible.builtin.shell: |
-        cd /tmp/microservices_src_control
+        cd /tmp/PCPO
         docker compose up -d --build --remove-orphans
       delegate_to: localhost
       run_once: true
