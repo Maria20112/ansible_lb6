@@ -4,7 +4,7 @@ set -e
 
 # 1. Запускаем SSH-демон в фоновом режиме (требует прав root)
 echo "Starting SSH service..."
-service ssh start
+sudo /usr/sbin/sshd
 
 # 2. Понижаем привилегии и запускаем основное приложение.
 # Ключевое слово 'exec' заменяет текущий процесс оболочки (bash) процессом dotnet.

@@ -40,7 +40,7 @@ EXPOSE 8080
 COPY entrypoint.sh /entrypoint.sh
 
 RUN chmod +x /entrypoint.sh
-#USER student
+USER student
 
 ENTRYPOINT ["/entrypoint.sh"]
 #ENTRYPOINT sudo service ssh start && sudo --preserve-env=ASPNETCORE_URLS -u nonroot dotnet ApartmentRentals.WebAPI.dll
