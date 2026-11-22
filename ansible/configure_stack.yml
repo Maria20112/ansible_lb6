@@ -7,7 +7,7 @@
     # --- ЭТАП 1: Получение изменений по SSH (п. 4) ---
     - name: Pull latest changes from Git repository
       ansible.builtin.git:
-        repo: "https://github.com/Maria20112/ansible_lb6.git"
+        repo: "git@github.com:Maria20112/ansible_lb6.git"
         dest: /tmp/PCPO
         version: main
         update: yes
@@ -41,6 +41,7 @@
           sonarsource/sonar-scanner-cli \
           sonar-scanner -Dsonar.projectKey={{ inventory_hostname }} -Dsonar.sources=. \
           -Dsonar.host.url=http://host.docker.internal:9000 \
+          -Dsonar.qualitygate.wait=true \
           -Dsonar.token={{ sonarqube_token }}
       delegate_to: localhost
       when: git_result.changed
