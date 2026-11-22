@@ -31,7 +31,18 @@
         backup: yes
       become: true
       
-    # --- ЭТАП 4: CI - Статический анализ (только при изменениях) ---
+    - name: Validate secrets
+      ansible.builtin.assert:
+        that:
+          - sonarqube_token is defined
+          - sonarqube_token | length >= 20
+          - sonarqube_token | length <= 200
+          - sonarqube_token is match('^[a-zA-Z0-9_\\-\\.]+$')
+        fail_msg: >
+          CRITICAL: Secrets validation failed!
+          Check group_vars/microservices/secrets.yml and vault password file.
+        success_msg: "All secrets passed format validation."
+
     - name: CI - Run containerized SonarQube Scanner
       ansible.builtin.shell: |
         docker run --rm \
